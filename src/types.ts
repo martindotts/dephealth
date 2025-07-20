@@ -1,90 +1,63 @@
-export interface OutdatedInfo {
-  [pkg: string]: {
-    current: string;
-    latest: string;
-    wanted: string;
-  };
+// Core data structures
+export interface Package {
+  name: string
+  current: string
+  latest: string
+  currentDate: Date
+  latestDate: Date
+  createdDate: Date
+  versionCount: number
+  deprecated: boolean
+  dependencyCount: number
+  devDependencyCount: number
+  lastWeekDownloads: number
+  vulnerabilities: {
+    critical: number
+    high: number
+    moderate: number
+    low: number
+  }
+  openIssuesCount: number
 }
 
-export interface AuditInfo {
-  vulnerabilities: Record<string, any>;
+export interface Scores {
+  maturity: number
+  updateFrequency: number
+  deprecation: number
+  dependency: number
+  download: number
+  vulnerability: number
+  issues: number
 }
 
-export interface RepoHealth {
-  stars: number;
-  openIssues: number;
-  lastCommit: string;
-  platform: string;
+// NPM data structures
+export interface NpmPackageInfo {
+  name: string
+  version: string
+  'dist-tags': {
+    latest: string
+  },
+  time: {
+    modified: string
+    created: string,
+    [key: string]: string
+  },
+  deprecated: unknown
 }
 
-export interface PackageInfo {
-  version: string;
-  repository?: {
-    url: string;
-  };
+export interface NpmOutdatedInfo {
+  wanted: string
+  latest: string
 }
 
-export interface ScoringConfig {
-  weights: {
-    lag: number;
-    vuln: number;
-    health: number;
-    activity: number;
-  };
-  constants: {
-    maxStars: number;
-    minStarsForIssueRatio: number;
-    maxIssueRatio: number;
-    activityThresholdDays: number;
-  };
-  penalties: {
-    majorUpdate: number;
-    minorUpdate: number;
-    patchUpdate: number;
-    criticalVuln: number;
-    highVuln: number;
-    moderateVuln: number;
-  };
+export interface NpmAuditVulnerability {
+  severity: string
+  title: string
+  description?: string
 }
 
-export interface AppConfig {
-  tokens?: {
-    github?: string;
-    gitlab?: string;
-    bitbucket?: string;
-  };
-  scoring?: Partial<ScoringConfig>;
-}
-
-export interface Config {
-  githubToken?: string;
-  gitlabToken?: string;
-  bitbucketToken?: string;
-  configFile?: string;
-}
-
-export interface ScoringParams {
-  current: string;
-  latest: string;
-  severity: {
-    critical: number;
-    high: number;
-    moderate: number;
-  };
-  stars: number;
-  openIssues: number;
-  lastCommit: string;
-}
-
-export interface DependencyResult {
-  name: string;
-  current: string;
-  latest: string;
-  outdated: {
-    wanted: string;
-    latest: string;
-  } | null;
-  vulnerabilitiesCount: number;
-  repoHealth: RepoHealth | null;
-  score?: number;
+export interface NpmAuditResult {
+  vulnerabilities: Record<string, {
+    via: NpmAuditVulnerability[]
+  }>
 } 

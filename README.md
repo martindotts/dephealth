@@ -1,377 +1,153 @@
-# dephealth
+# DepHealth 🔍
 
-A comprehensive dependency health analyzer for Node.js projects that checks for outdated packages, security vulnerabilities, and repository health metrics.
+A lightweight dependency health analyzer for Node.js projects that focuses on security vulnerabilities and outdated packages.
 
-## Features
+## ✨ Features
 
-- 🔍 **Dependency Analysis**: Check for outdated packages and their latest versions
-- 🛡️ **Security Audit**: Identify packages with known vulnerabilities
-- 📊 **Repository Health**: Analyze GitHub, GitLab, and Bitbucket repository metrics
-- 🔐 **Multi-Platform Support**: Works with GitHub, GitLab, and Bitbucket APIs
-- 🧮 **Smart Scoring**: Objective health scoring based on version lag, vulnerabilities, community metrics, and activity
-- ⚙️ **Flexible Configuration**: JavaScript config files with environment variable support
-- 🎯 **Customizable Scoring**: Adjust weights, penalties, and thresholds to match your needs
+- 🔒 **Security First**: Analyzes npm audit results for vulnerabilities
+- 📦 **Version Tracking**: Detects outdated packages using semantic versioning
+- 🎯 **Smart Scoring**: Objective health score based on vulnerabilities and version lag
+- 🎨 **Beautiful Output**: Colored console tables with emojis and clear recommendations
+- ⚡ **Fast & Lightweight**: No external API calls or tokens required
+- 🔧 **Zero Configuration**: Works out of the box with any Node.js project
 
-## Installation
+## 🚀 Quick Start
 
 ```bash
-npm install dephealth
+# Install globally
+npm install -g dephealth
+
+# Or use npx (recommended)
+npx dephealth
+
+# Analyze any project
+cd your-project
+npx dephealth
 ```
 
-Or use it directly with npx:
+## 📊 What It Analyzes
 
+### 🔒 Security Vulnerabilities
+- **Critical vulnerabilities**: Major security risks
+- **High vulnerabilities**: Significant security concerns  
+- **Moderate vulnerabilities**: Minor security issues
+
+### 📦 Version Health
+- **Major updates**: Breaking changes (highest penalty)
+- **Minor updates**: New features (moderate penalty)
+- **Patch updates**: Bug fixes (minimal penalty)
+
+### 🎯 Health Score (0-100)
+- **80-100**: Excellent - Your project is in great shape!
+- **60-79**: Good - Some improvements recommended
+- **0-59**: Needs attention - Consider reviewing dependencies
+
+## 📋 Output Example
+
+```
+📊 Dependency Health Analysis
+┌─────────────┬──────────┬─────────┬──────────┬─────────────────┬───────┐
+│ Package     │ Current  │ Latest  │ Outdated │ Vulnerabilities │ Score │
+├─────────────┼──────────┼─────────┼──────────┼─────────────────┼───────┤
+│ express     │ 4.18.2   │ 4.18.2  │ No       │ 0               │ 100   │
+│ lodash      │ 4.17.21  │ 4.17.21 │ No       │ 0               │ 100   │
+│ request     │ 2.88.2   │ 2.88.2  │ No       │ 3               │ 40    │
+│ outdated    │ 1.0.0    │ 2.0.0   │ Yes      │ 0               │ 50    │
+└─────────────┴──────────┴─────────┴──────────┴─────────────────┴───────┘
+
+📈 Summary:
+   • Total dependencies: 4
+   • Outdated packages: 1
+   • Packages with vulnerabilities: 1
+   • Average health score: 72
+
+🔄 Recommendations:
+   • Consider updating 1 outdated package
+   • Run npm audit fix to address 1 package with vulnerabilities
+
+🏥 Overall Health:
+   Good (72/100) - Some improvements recommended
+```
+
+## 🛠️ Usage
+
+### Basic Usage
 ```bash
 npx dephealth
 ```
 
-## Usage
-
-### CLI Usage
-
+### Help
 ```bash
-# Basic usage (uses environment variables or default values)
-npx dephealth
-
-# Generate configuration template
-npx dephealth --init-config                    # Creates dephealth-config.js
-npx dephealth --init-config my-config.js      # Creates my-config.js
-
-# With custom configuration file
-npx dephealth --config config.js
-
-# Override tokens via CLI (highest priority)
-npx dephealth --github-token $GITHUB_TOKEN --config config.js
-
-# Show help
 npx dephealth --help
 ```
 
-### Programmatic Usage
+## 🎯 Scoring Algorithm
 
-```typescript
-import { analyzeDependencies, displayResults, setScoringConfig } from 'dephealth';
+The health score is calculated using a weighted combination of:
 
-// Customize scoring before analysis
-setScoringConfig({
-  weights: {
-    lag: 0.20,
-    vuln: 0.40,
-    health: 0.25,
-    activity: 0.15
-  }
-});
+### Version Lag (50% weight)
+- **Major updates**: Exponential penalty for breaking changes
+- **Minor updates**: Linear penalty for new features  
+- **Patch updates**: Minimal penalty for bug fixes
 
-async function main() {
-  const results = await analyzeDependencies();
-  displayResults(results);
-}
+### Vulnerabilities (50% weight)
+- **Critical**: Exponential penalty (highest impact)
+- **High**: Linear penalty (significant impact)
+- **Moderate**: Minimal penalty (low impact)
 
-main();
-```
+## 🔧 Configuration
 
-## Configuration
+The tool works out of the box with sensible defaults. No configuration required!
 
-### Environment Variables
-
-You can set environment variables directly:
-
-```bash
-export GITHUB_TOKEN=your_github_token
-export GITLAB_TOKEN=your_gitlab_token
-export BITBUCKET_TOKEN=your_bitbucket_token
-```
-
-Or use a `.env` file in your project root:
-
-```bash
-# .env
-GITHUB_TOKEN=your_github_token
-GITLAB_TOKEN=your_gitlab_token
-BITBUCKET_TOKEN=your_bitbucket_token
-```
-
-**Note**: The configuration file automatically loads `.env` if the `dotenv` package is available. If you don't have `dotenv` installed, you can install it with `npm install dotenv` or set environment variables directly.
-
-### Configuration File
-
-Generate a configuration template:
-
-```bash
-npx dephealth --init-config
-```
-
-This creates `dephealth-config.js` with the default configuration. You can also specify a custom filename:
-
-```bash
-npx dephealth --init-config my-config.js
-```
-
-The generated file will look like this:
-
+### Default Scoring Weights
 ```javascript
-module.exports = {
-  // API tokens (can use environment variables)
-  tokens: {
-    github: process.env.GITHUB_TOKEN,
-    gitlab: process.env.GITLAB_TOKEN,
-    bitbucket: process.env.BITBUCKET_TOKEN
+{
+  weights: {
+    lag: 0.5,    // Version lag penalty
+    vuln: 0.5    // Vulnerability penalty
   },
-
-  // Customize scoring algorithm (all fields are optional)
-  scoring: {
-    weights: {
-      lag: 0.25,        // Version lag penalty
-      vuln: 0.35,       // Vulnerability penalty
-      health: 0.25,     // Community health
-      activity: 0.15    // Recent activity
-    },
-    constants: {
-      maxStars: 100000,
-      minStarsForIssueRatio: 10,
-      maxIssueRatio: 0.5,
-      activityThresholdDays: 365
-    },
-    penalties: {
-      majorUpdate: 0.5,
-      minorUpdate: 0.1,
-      patchUpdate: 0.02,
-      criticalVuln: 0.6,
-      highVuln: 0.3,
-      moderateVuln: 0.1
-    }
-  }
-}
-```
-
-### CLI Options
-
-- `--github-token <token>`: GitHub API token
-- `--gitlab-token <token>`: GitLab API token
-- `--bitbucket-token <token>`: Bitbucket API token
-- `--config <file>, -c <file>`: Config file path (JavaScript/JSON)
-- `--init-config [filename]`: Generate configuration template file
-- `--help, -h`: Show help
-
-### Configuration Precedence
-
-1. **CLI arguments** (highest priority)
-2. **Config file** (if specified with `--config`)
-3. **Environment variables**
-4. **Default values**
-
-## Scoring System
-
-The tool uses an objective scoring system (0-100) based on:
-
-- **Version Lag (25%)**: Penalizes outdated packages using semantic versioning
-- **Vulnerabilities (35%)**: Exponential penalty for critical/high vulnerabilities
-- **Community Health (25%)**: Combines popularity (stars) with issue management ratio
-- **Activity (15%)**: Recent commit activity with exponential decay
-
-### Community Score Calculation
-
-The community score intelligently combines:
-- **Popularity**: Logarithmic scale based on repository stars
-- **Issue Ratio**: Issues per star ratio (penalizes repos with poor issue management)
-- **Balance**: 60% popularity + 40% issue management
-
-### Customizing Scoring
-
-You can customize every aspect of the scoring algorithm:
-
-```javascript
-// config.js - Security-focused configuration
-module.exports = {
-  scoring: {
-    weights: {
-      lag: 0.15,        // Less weight on version lag
-      vuln: 0.50,       // Much more weight on vulnerabilities
-      health: 0.20,     // Community health
-      activity: 0.15    // Recent activity
-    },
-    penalties: {
-      criticalVuln: 0.8,    // Higher penalty for critical vulns
-      highVuln: 0.5,        // Higher penalty for high vulns
-      moderateVuln: 0.2     // Higher penalty for moderate vulns
-    }
-  }
-}
-```
-
-## API Reference
-
-### `analyzeDependencies(): Promise<DependencyResult[]>`
-
-Analyzes all dependencies in the current project and returns detailed information about each package.
-
-### `displayResults(results: DependencyResult[]): void`
-
-Displays the analysis results in a formatted table.
-
-### `getConfig(): Promise<Config>`
-
-Gets the configuration with proper precedence (CLI args > config file > env vars > defaults).
-
-### Scoring Functions
-
-```typescript
-import { 
-  calcFinalScore, 
-  calcLagScore, 
-  calcVulnScore, 
-  calcCommunityScore, 
-  calcActivityScore,
-  debugScore,
-  setScoringConfig,
-  getScoringConfig,
-  resetScoringConfig,
-  DEFAULT_SCORING_CONFIG
-} from 'dephealth';
-
-// Configure scoring globally
-setScoringConfig({
-  weights: { lag: 0.20, vuln: 0.40, health: 0.25, activity: 0.15 }
-});
-
-// Calculate individual scores
-const lagScore = calcLagScore(currentVersion, latestVersion);
-const vulnScore = calcVulnScore({ critical: 0, high: 1, moderate: 2 });
-const communityScore = calcCommunityScore(stars, openIssues);
-const activityScore = calcActivityScore(lastCommitDate);
-
-// Calculate final score
-const finalScore = calcFinalScore({
-  current: '1.0.0',
-  latest: '2.0.0',
-  severity: { critical: 0, high: 0, moderate: 0 },
-  stars: 1000,
-  openIssues: 10,
-  lastCommit: '2024-01-01T00:00:00.000Z'
-});
-
-// Debug scoring breakdown
-const debug = debugScore(params);
-```
-
-### Types
-
-```typescript
-interface DependencyResult {
-  name: string;
-  current: string;
-  latest: string;
-  outdated: {
-    wanted: string;
-    latest: string;
-  } | null;
-  vulnerabilitiesCount: number;
-  repoHealth: RepoHealth | null;
-  score?: number;
-}
-
-interface RepoHealth {
-  stars: number;
-  openIssues: number;
-  lastCommit: string;
-  platform: string;
-}
-
-interface Config {
-  githubToken?: string;
-  gitlabToken?: string;
-  bitbucketToken?: string;
-  configFile?: string;
-}
-
-interface AppConfig {
-  tokens?: {
-    github?: string;
-    gitlab?: string;
-    bitbucket?: string;
-  };
-  scoring?: Partial<ScoringConfig>;
-}
-
-interface ScoringConfig {
-  weights: {
-    lag: number;
-    vuln: number;
-    health: number;
-    activity: number;
-  };
-  constants: {
-    maxStars: number;
-    minStarsForIssueRatio: number;
-    maxIssueRatio: number;
-    activityThresholdDays: number;
-  };
   penalties: {
-    majorUpdate: number;
-    minorUpdate: number;
-    patchUpdate: number;
-    criticalVuln: number;
-    highVuln: number;
-    moderateVuln: number;
-  };
-}
-
-interface ScoringParams {
-  current: string;
-  latest: string;
-  severity: {
-    critical: number;
-    high: number;
-    moderate: number;
-  };
-  stars: number;
-  openIssues: number;
-  lastCommit: string;
+    majorUpdate: 0.5,      // Major version penalty
+    minorUpdate: 0.1,      // Minor version penalty  
+    patchUpdate: 0.02,     // Patch version penalty
+    criticalVuln: 0.6,     // Critical vulnerability penalty
+    highVuln: 0.3,         // High vulnerability penalty
+    moderateVuln: 0.1      // Moderate vulnerability penalty
+  }
 }
 ```
 
-## Development
+## 📦 Installation
 
-### Prerequisites
-
-- Node.js 18+
-- npm
-
-### Setup
-
+### Global Installation
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd lib-health-check
-
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Run in development mode
-npm run dev
+npm install -g dephealth
 ```
 
-### Scripts
+### Local Development
+```bash
+git clone https://github.com/your-username/dephealth.git
+cd dephealth
+npm install
+npm run build
+npm start
+```
 
-- `npm run build`: Build the project
-- `npm run dev`: Build in watch mode
-- `npm run start`: Run the CLI
-- `npm run clean`: Clean build artifacts
-
-## License
-
-MIT
-
-## Contributing
+## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Support
+## 📄 License
 
-If you encounter any issues or have questions, please open an issue on GitHub. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- Built with TypeScript for type safety
+- Uses `semver` for semantic versioning analysis
+- Powered by `npm audit` and `npm outdated`
+- Beautiful output with `chalk` and `console-table-printer` 

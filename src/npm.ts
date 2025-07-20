@@ -2,44 +2,45 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { promisify } from 'util'
 import { exec } from 'child_process'
-import { OutdatedInfo, AuditInfo, PackageInfo } from './types'
+import { NpmPackageInfo, NpmOutdatedInfo, NpmAuditResult } from './types'
 
 const execAsync = promisify(exec)
 
-export async function readPackageJson() {
+/**
+ * Read package.json from current directory
+ */
+export async function readPackageJson(): Promise<any> {
   const pkgPath = path.join(process.cwd(), 'package.json')
   const content = await fs.promises.readFile(pkgPath, 'utf-8')
-  return JSON.parse(content) as any
+  return JSON.parse(content)
 }
 
-export async function getPackageInfo(packageName: string): Promise<PackageInfo> {
+/**
+ * Get latest version of a package from npm registry
+ */
+export async function getPackageInfo(packageName: string): Promise<NpmPackageInfo | null> {
   try {
     const { stdout } = await execAsync(`npm view ${packageName} --json`)
-    const data = JSON.parse(stdout) as PackageInfo
-    return {
-      version: data.version || 'unknown',
-      repository: data.repository || undefined
-    }
+    const data = JSON.parse(stdout)
+    return data
   } catch (error) {
-    console.warn(`Failed to get info for ${packageName}:`, error)
-    return {
-      version: 'unknown'
-    }
+    console.error(packageName, error)
+    return null
   }
 }
 
-export async function checkOutdated(): Promise<OutdatedInfo> {
+/**
+ * Get outdated packages information
+ */
+export async function getOutdatedPackages(): Promise<Record<string, NpmOutdatedInfo>> {
   try {
     const { stdout } = await execAsync('npm outdated --json')
-    if (!stdout) return {}
-    const result = JSON.parse(stdout)
-    return result || {}
+    return JSON.parse(stdout) || {}
   } catch (err: any) {
     // npm outdated exits with code >0 when there are outdated packages
     if (err.stdout) {
       try {
-        const result = JSON.parse(err.stdout)
-        return result || {}
+        return JSON.parse(err.stdout) || {}
       } catch {
         return {}
       }
@@ -48,21 +49,41 @@ export async function checkOutdated(): Promise<OutdatedInfo> {
   }
 }
 
-export async function checkAudit(): Promise<AuditInfo> {
+/**
+ * Get audit results
+ */
+export async function getAuditResults(): Promise<NpmAuditResult> {
   try {
     const { stdout } = await execAsync('npm audit --json')
-    if (!stdout) return { vulnerabilities: {} }
-    const result = JSON.parse(stdout) as AuditInfo
-    return result || { vulnerabilities: {} }
+    return JSON.parse(stdout) || { vulnerabilities: {} }
   } catch (err: any) {
     if (err.stdout) {
       try {
-        const result = JSON.parse(err.stdout) as AuditInfo
-        return result || { vulnerabilities: {} }
+        return JSON.parse(err.stdout) || { vulnerabilities: {} }
       } catch {
         return { vulnerabilities: {} }
       }
     }
     return { vulnerabilities: {} }
   }
-} 
+}
+
+/**
+ * Get last week downloads for a package using npm API
+ */
+export async function getLastWeekDownloads(packageName: string): Promise<number> {
+  try {
+    const response = await fetch(`https://api.npmjs.org/downloads/point/last-week/${packageName}`)
+    
+    if (!response.ok) {
+      console.warn(`Failed to get downloads for ${packageName}: ${response.status}`)
+      return 0
+    }
+    
+    const data = await response.json()
+    return data.downloads || 0
+  } catch (error) {
+    console.warn(`Error fetching downloads for ${packageName}:`, error)
+    return 0
+  }
+}
