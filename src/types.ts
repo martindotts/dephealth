@@ -33,6 +33,19 @@ export interface Config {
   noTokens?: boolean;
 }
 
+export interface ScoringParams {
+  current: string;
+  latest: string;
+  severity: {
+    critical: number;
+    high: number;
+    moderate: number;
+  };
+  stars: number;
+  openIssues: number;
+  lastCommit: string;
+}
+
 export interface DependencyResult {
   name: string;
   current: string;

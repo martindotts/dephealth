@@ -3,54 +3,8 @@ import { readPackageJson, getPackageInfo, checkOutdated, checkAudit } from './np
 import { fetchRepoHealth } from './repo-health'
 import { DependencyResult } from './types'
 import pLimit from 'p-limit'
-import semver from 'semver'
-
-// Scoring weights
-const WEIGHTS = { lag: 0.25, vuln: 0.35, stars: 0.15, issues: 0.1, recent: 0.15 }
-const MAX_STARS = 100000
-const MAX_OPEN_ISSUES = 500
-
-function calcLagScore(current: string, latest: string): number {
-  if (!latest || latest === 'unknown') return 1
-  const cur = semver.coerce(current)
-  const lat = semver.coerce(latest)
-  if (!cur || !lat) return 1
-  const diff = {
-    major: lat.major - cur.major,
-    minor: lat.minor - cur.minor,
-    patch: lat.patch - cur.patch
-  }
-  const penalty = Math.min(diff.major * 0.5 + diff.minor * 0.1 + diff.patch * 0.02, 1)
-  return 1 - penalty
-}
-
-function calcVulnScore(sev: {critical:number, high:number, moderate:number}): number {
-  const penalty = Math.min(sev.critical*0.6 + sev.high*0.3 + sev.moderate*0.1, 1)
-  return 1 - penalty
-}
-
-function calcPopScore(stars:number): number {
-  return Math.min(Math.log10(stars+1)/Math.log10(MAX_STARS+1),1)
-}
-
-function calcIssueScore(openIssues:number): number {
-  return 1 - Math.min(openIssues / MAX_OPEN_ISSUES,1)
-}
-
-function calcActiveScore(lastCommit:string): number {
-  if(!lastCommit) return 0
-  const days = (Date.now() - new Date(lastCommit).getTime())/ (1000*60*60*24)
-  return Math.exp(-days/365)
-}
-
-function calcFinalScore(params:{current:string, latest:string, severity:{critical:number, high:number, moderate:number}, stars:number, openIssues:number, lastCommit:string}): number {
-  const value = WEIGHTS.lag   * calcLagScore(params.current, params.latest) +
-               WEIGHTS.vuln  * calcVulnScore(params.severity) +
-               WEIGHTS.stars * calcPopScore(params.stars) +
-               WEIGHTS.issues* calcIssueScore(params.openIssues) +
-               WEIGHTS.recent* calcActiveScore(params.lastCommit)
-  return Math.round(value * 100)
-}
+import { calcFinalScore } from './scoring'
+import { ScoringParams } from './types'
 
 export async function analyzeDependencies(): Promise<DependencyResult[]> {
   const config = await getConfig()
@@ -95,7 +49,7 @@ export async function analyzeDependencies(): Promise<DependencyResult[]> {
         stars: repoHealth?.stars ?? 0,
         openIssues: repoHealth?.openIssues ?? 0,
         lastCommit: repoHealth?.lastCommit ?? ''
-      })
+      } as ScoringParams)
 
       return {
         name,
