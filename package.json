@@ -1,6 +1,6 @@
 {
   "name": "dephealth",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A comprehensive dependency health analyzer for Node.js projects",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,8 +28,16 @@
     "package",
     "analyzer"
   ],
-  "author": "",
+  "author": "mtpy",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/martindotts/dephealth.git"
+  },
+  "homepage": "https://github.com/martindotts/dephealth#readme",
+  "bugs": {
+    "url": "https://github.com/martindotts/dephealth/issues"
+  },
   "packageManager": "npm@10.0.0",
   "devDependencies": {
     "@types/node": "^20.10.0",

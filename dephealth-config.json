@@ -1,0 +1,11 @@
+{
+  "boosters": {
+    "maturity": 2,
+    "updateFrequency": 1,
+    "deprecation": 3,
+    "dependency": 1,
+    "download": 1,
+    "vulnerability": 2,
+    "issues": 1
+  }
+}
