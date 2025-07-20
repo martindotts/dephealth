@@ -8,9 +8,9 @@ A comprehensive dependency health analyzer for Node.js projects that checks for 
 - 🛡️ **Security Audit**: Identify packages with known vulnerabilities
 - 📊 **Repository Health**: Analyze GitHub, GitLab, and Bitbucket repository metrics
 - 🔐 **Multi-Platform Support**: Works with GitHub, GitLab, and Bitbucket APIs
-- 📈 **Interactive Mode**: Easy token input for API authentication
-- 🎯 **Flexible Configuration**: Support for CLI args, config files, and environment variables
 - 🧮 **Smart Scoring**: Objective health scoring based on version lag, vulnerabilities, community metrics, and activity
+- ⚙️ **Flexible Configuration**: JavaScript config files with environment variable support
+- 🎯 **Customizable Scoring**: Adjust weights, penalties, and thresholds to match your needs
 
 ## Installation
 
@@ -29,17 +29,18 @@ npx dephealth
 ### CLI Usage
 
 ```bash
-# Basic usage (interactive token prompt if no tokens provided)
+# Basic usage (uses environment variables or default values)
 npx dephealth
 
-# Provide tokens explicitly
-npx dephealth --github-token YOUR_TOKEN
+# Generate configuration template
+npx dephealth --init-config                    # Creates dephealth-config.js
+npx dephealth --init-config my-config.js      # Creates my-config.js
 
-# Skip tokens entirely (rate-limited requests)
-npx dephealth --no-tokens
+# With custom configuration file
+npx dephealth --config config.js
 
-# Using config file
-npx dephealth --config config.json
+# Override tokens via CLI (highest priority)
+npx dephealth --github-token $GITHUB_TOKEN --config config.js
 
 # Show help
 npx dephealth --help
@@ -48,7 +49,17 @@ npx dephealth --help
 ### Programmatic Usage
 
 ```typescript
-import { analyzeDependencies, displayResults } from 'dephealth';
+import { analyzeDependencies, displayResults, setScoringConfig } from 'dephealth';
+
+// Customize scoring before analysis
+setScoringConfig({
+  weights: {
+    lag: 0.20,
+    vuln: 0.40,
+    health: 0.25,
+    activity: 0.15
+  }
+});
 
 async function main() {
   const results = await analyzeDependencies();
@@ -62,21 +73,73 @@ main();
 
 ### Environment Variables
 
+You can set environment variables directly:
+
 ```bash
 export GITHUB_TOKEN=your_github_token
 export GITLAB_TOKEN=your_gitlab_token
 export BITBUCKET_TOKEN=your_bitbucket_token
 ```
 
-### Config File
+Or use a `.env` file in your project root:
 
-Create a JSON file (e.g., `config.json`):
+```bash
+# .env
+GITHUB_TOKEN=your_github_token
+GITLAB_TOKEN=your_gitlab_token
+BITBUCKET_TOKEN=your_bitbucket_token
+```
 
-```json
-{
-  "githubToken": "your_github_token",
-  "gitlabToken": "your_gitlab_token",
-  "bitbucketToken": "your_bitbucket_token"
+**Note**: The configuration file automatically loads `.env` if the `dotenv` package is available. If you don't have `dotenv` installed, you can install it with `npm install dotenv` or set environment variables directly.
+
+### Configuration File
+
+Generate a configuration template:
+
+```bash
+npx dephealth --init-config
+```
+
+This creates `dephealth-config.js` with the default configuration. You can also specify a custom filename:
+
+```bash
+npx dephealth --init-config my-config.js
+```
+
+The generated file will look like this:
+
+```javascript
+module.exports = {
+  // API tokens (can use environment variables)
+  tokens: {
+    github: process.env.GITHUB_TOKEN,
+    gitlab: process.env.GITLAB_TOKEN,
+    bitbucket: process.env.BITBUCKET_TOKEN
+  },
+
+  // Customize scoring algorithm (all fields are optional)
+  scoring: {
+    weights: {
+      lag: 0.25,        // Version lag penalty
+      vuln: 0.35,       // Vulnerability penalty
+      health: 0.25,     // Community health
+      activity: 0.15    // Recent activity
+    },
+    constants: {
+      maxStars: 100000,
+      minStarsForIssueRatio: 10,
+      maxIssueRatio: 0.5,
+      activityThresholdDays: 365
+    },
+    penalties: {
+      majorUpdate: 0.5,
+      minorUpdate: 0.1,
+      patchUpdate: 0.02,
+      criticalVuln: 0.6,
+      highVuln: 0.3,
+      moderateVuln: 0.1
+    }
+  }
 }
 ```
 
@@ -85,8 +148,8 @@ Create a JSON file (e.g., `config.json`):
 - `--github-token <token>`: GitHub API token
 - `--gitlab-token <token>`: GitLab API token
 - `--bitbucket-token <token>`: Bitbucket API token
-- `--no-tokens`: Skip interactive token input and use rate-limited requests
-- `--config <file>, -c <file>`: Config file path (JSON)
+- `--config <file>, -c <file>`: Config file path (JavaScript/JSON)
+- `--init-config [filename]`: Generate configuration template file
 - `--help, -h`: Show help
 
 ### Configuration Precedence
@@ -94,7 +157,7 @@ Create a JSON file (e.g., `config.json`):
 1. **CLI arguments** (highest priority)
 2. **Config file** (if specified with `--config`)
 3. **Environment variables**
-4. **Interactive prompt** (if no tokens provided and `--no-tokens` not used)
+4. **Default values**
 
 ## Scoring System
 
@@ -112,6 +175,29 @@ The community score intelligently combines:
 - **Issue Ratio**: Issues per star ratio (penalizes repos with poor issue management)
 - **Balance**: 60% popularity + 40% issue management
 
+### Customizing Scoring
+
+You can customize every aspect of the scoring algorithm:
+
+```javascript
+// config.js - Security-focused configuration
+module.exports = {
+  scoring: {
+    weights: {
+      lag: 0.15,        // Less weight on version lag
+      vuln: 0.50,       // Much more weight on vulnerabilities
+      health: 0.20,     // Community health
+      activity: 0.15    // Recent activity
+    },
+    penalties: {
+      criticalVuln: 0.8,    // Higher penalty for critical vulns
+      highVuln: 0.5,        // Higher penalty for high vulns
+      moderateVuln: 0.2     // Higher penalty for moderate vulns
+    }
+  }
+}
+```
+
 ## API Reference
 
 ### `analyzeDependencies(): Promise<DependencyResult[]>`
@@ -124,7 +210,7 @@ Displays the analysis results in a formatted table.
 
 ### `getConfig(): Promise<Config>`
 
-Gets the configuration with proper precedence (CLI args > config file > env vars > interactive).
+Gets the configuration with proper precedence (CLI args > config file > env vars > defaults).
 
 ### Scoring Functions
 
@@ -135,8 +221,17 @@ import {
   calcVulnScore, 
   calcCommunityScore, 
   calcActivityScore,
-  debugScore 
+  debugScore,
+  setScoringConfig,
+  getScoringConfig,
+  resetScoringConfig,
+  DEFAULT_SCORING_CONFIG
 } from 'dephealth';
+
+// Configure scoring globally
+setScoringConfig({
+  weights: { lag: 0.20, vuln: 0.40, health: 0.25, activity: 0.15 }
+});
 
 // Calculate individual scores
 const lagScore = calcLagScore(currentVersion, latestVersion);
@@ -185,9 +280,39 @@ interface Config {
   githubToken?: string;
   gitlabToken?: string;
   bitbucketToken?: string;
-  interactive?: boolean;
   configFile?: string;
-  noTokens?: boolean;
+}
+
+interface AppConfig {
+  tokens?: {
+    github?: string;
+    gitlab?: string;
+    bitbucket?: string;
+  };
+  scoring?: Partial<ScoringConfig>;
+}
+
+interface ScoringConfig {
+  weights: {
+    lag: number;
+    vuln: number;
+    health: number;
+    activity: number;
+  };
+  constants: {
+    maxStars: number;
+    minStarsForIssueRatio: number;
+    maxIssueRatio: number;
+    activityThresholdDays: number;
+  };
+  penalties: {
+    majorUpdate: number;
+    minorUpdate: number;
+    patchUpdate: number;
+    criticalVuln: number;
+    highVuln: number;
+    moderateVuln: number;
+  };
 }
 
 interface ScoringParams {

@@ -9,6 +9,10 @@ export {
   calcCommunityScore, 
   calcActivityScore,
   debugScore,
+  setScoringConfig,
+  getScoringConfig,
+  resetScoringConfig,
+  DEFAULT_SCORING_CONFIG,
   WEIGHTS,
   MAX_STARS,
   MIN_STARS_FOR_ISSUE_RATIO,
@@ -22,5 +26,7 @@ export type {
   PackageInfo,
   OutdatedInfo,
   AuditInfo,
-  ScoringParams
+  ScoringParams,
+  ScoringConfig,
+  AppConfig
 } from './types' 

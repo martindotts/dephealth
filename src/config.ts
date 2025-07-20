@@ -1,6 +1,7 @@
 import * as fs from 'fs'
-import * as readline from 'readline'
-import { Config } from './types'
+import * as path from 'path'
+import { Config, AppConfig } from './types'
+import { setScoringConfig } from './scoring'
 
 // Parse command line arguments
 export function parseArgs(): Config {
@@ -18,12 +19,14 @@ export function parseArgs(): Config {
       case '--bitbucket-token':
         config.bitbucketToken = args[++i] || ''
         break
-      case '--no-tokens':
-        config.interactive = false
-        break
       case '--config':
       case '-c':
         config.configFile = args[++i] || ''
+        break
+      case '--init-config':
+        const fileName = args[++i] || 'dephealth-config.js'
+        initConfigFile(fileName)
+        process.exit(0)
         break
       case '--help':
       case '-h':
@@ -34,8 +37,8 @@ Options:
   --github-token <token>     GitHub API token
   --gitlab-token <token>     GitLab API token  
   --bitbucket-token <token>  Bitbucket API token
-  --no-tokens                Skip interactive token input
-  --config <file>, -c <file> Config file path (JSON)
+  --config <file>, -c <file> Config file path (JavaScript/JSON)
+  --init-config [filename]   Generate configuration template file
   --help, -h                 Show this help
 
 Environment variables:
@@ -43,12 +46,17 @@ Environment variables:
   GITLAB_TOKEN              GitLab API token
   BITBUCKET_TOKEN           Bitbucket API token
 
-Config file format:
-  {
-    "githubToken": "your_token",
-    "gitlabToken": "your_token",
-    "bitbucketToken": "your_token"
-  }
+Configuration precedence:
+  1. CLI arguments (highest priority)
+  2. Config file
+  3. Environment variables
+  4. Default values
+
+Examples:
+  npx dephealth --init-config                    # Creates dephealth-config.js
+  npx dephealth --init-config my-config.js      # Creates my-config.js
+  npx dephealth --config config.js              # Use custom config file
+  npx dephealth --github-token $GITHUB_TOKEN    # Use CLI tokens
         `)
         process.exit(0)
     }
@@ -57,53 +65,131 @@ Config file format:
   return config
 }
 
-// Load config from file
-export async function loadConfigFile(filePath: string): Promise<Config> {
+// Generate configuration template file
+function initConfigFile(fileName: string): void {
+  const template = `// Configuration file for dephealth
+// Generated on ${new Date().toISOString()}
+
+// Load environment variables from .env file (optional)
+try {
+  require('dotenv').config()
+} catch (error) {
+  // dotenv not installed, continue without it
+}
+
+module.exports = {
+  // API tokens (can use environment variables)
+  tokens: {
+    github: process.env.GITHUB_TOKEN,
+    gitlab: process.env.GITLAB_TOKEN,
+    bitbucket: process.env.BITBUCKET_TOKEN
+  },
+
+  // Customize scoring algorithm (all fields are optional)
+  scoring: {
+    // Weights for different factors (must sum to 1.0)
+    weights: {
+      lag: 0.25,        // Version lag penalty
+      vuln: 0.35,       // Vulnerability penalty
+      health: 0.25,     // Community health
+      activity: 0.15    // Recent activity
+    },
+
+    // Constants for calculations
+    constants: {
+      maxStars: 100000,              // Maximum stars for normalization
+      minStarsForIssueRatio: 10,     // Minimum stars to consider issue ratio
+      maxIssueRatio: 0.5,            // Maximum issues per star (50%)
+      activityThresholdDays: 365     // Days before considering repo stale
+    },
+
+    // Penalty multipliers
+    penalties: {
+      majorUpdate: 0.5,      // Penalty for major version updates
+      minorUpdate: 0.1,      // Penalty for minor version updates
+      patchUpdate: 0.02,     // Penalty for patch version updates
+      criticalVuln: 0.6,     // Penalty for critical vulnerabilities
+      highVuln: 0.3,         // Penalty for high vulnerabilities
+      moderateVuln: 0.1      // Penalty for moderate vulnerabilities
+    }
+  }
+}
+
+// Alternative: More aggressive scoring for security-focused projects
+/*
+module.exports = {
+  tokens: {
+    github: process.env.GITHUB_TOKEN
+  },
+  scoring: {
+    weights: {
+      lag: 0.15,        // Less weight on version lag
+      vuln: 0.50,       // Much more weight on vulnerabilities
+      health: 0.20,     // Community health
+      activity: 0.15    // Recent activity
+    },
+    penalties: {
+      criticalVuln: 0.8,    // Higher penalty for critical vulns
+      highVuln: 0.5,        // Higher penalty for high vulns
+      moderateVuln: 0.2     // Higher penalty for moderate vulns
+    }
+  }
+}
+*/
+`
+
   try {
-    const content = await fs.promises.readFile(filePath, 'utf-8')
-    return JSON.parse(content)
+    fs.writeFileSync(fileName, template, 'utf-8')
+    console.log(`✅ Configuration template created: ${fileName}`)
+    console.log(`📝 Edit the file to customize your settings`)
+    console.log(`🚀 Run: npx dephealth --config ${fileName}`)
   } catch (error) {
-    console.warn(`Failed to load config file: ${filePath}`)
+    console.error(`❌ Failed to create configuration file: ${error}`)
+    process.exit(1)
+  }
+}
+
+// Load config from JavaScript/JSON file
+export async function loadConfigFile(filePath: string): Promise<AppConfig> {
+  try {
+    const fullPath = path.resolve(filePath)
+    
+    if (!fs.existsSync(fullPath)) {
+      console.warn(`Config file not found: ${filePath}`)
+      return {}
+    }
+
+    const ext = path.extname(fullPath).toLowerCase()
+    
+    if (ext === '.js' || ext === '.mjs' || ext === '.cjs') {
+      // Load JavaScript config file
+      const configModule = await import(fullPath)
+      const config = configModule.default || configModule
+      
+      if (typeof config !== 'object' || config === null) {
+        throw new Error('Config file must export an object')
+      }
+      
+      return config as AppConfig
+    } else if (ext === '.json') {
+      // Load JSON config file
+      const content = await fs.promises.readFile(fullPath, 'utf-8')
+      return JSON.parse(content) as AppConfig
+    } else {
+      throw new Error(`Unsupported config file format: ${ext}`)
+    }
+  } catch (error) {
+    console.warn(`Failed to load config file: ${filePath}`, error)
     return {}
   }
 }
 
-// Interactive token input
-export async function promptForTokens(): Promise<Config> {
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-  })
-
-  const question = (query: string): Promise<string> => {
-    return new Promise((resolve) => {
-      rl.question(query, resolve)
-    })
-  }
-
-  const config: Config = {}
-
-  console.log('Enter your API tokens (press Enter to skip):\n')
-
-  const githubToken = await question('GitHub Token: ')
-  if (githubToken.trim()) config.githubToken = githubToken.trim()
-
-  const gitlabToken = await question('GitLab Token: ')
-  if (gitlabToken.trim()) config.gitlabToken = gitlabToken.trim()
-
-  const bitbucketToken = await question('Bitbucket Token: ')
-  if (bitbucketToken.trim()) config.bitbucketToken = bitbucketToken.trim()
-
-  rl.close()
-  return config
-}
-
-// Merge configs with priority: CLI args > config file > env vars > interactive
+// Merge configs with proper precedence
 export async function getConfig(): Promise<Config> {
   const cliConfig = parseArgs()
 
   // Load config file if specified
-  let fileConfig: Config = {}
+  let fileConfig: AppConfig = {}
   if (cliConfig.configFile) {
     fileConfig = await loadConfigFile(cliConfig.configFile)
   }
@@ -115,18 +201,17 @@ export async function getConfig(): Promise<Config> {
     bitbucketToken: process.env.BITBUCKET_TOKEN || undefined
   }
 
-  // Merge with priority
-  const config: Config = {
+  // Merge with precedence: CLI > config file > env vars
+  const finalConfig: Config = {
     ...envConfig,
-    ...fileConfig,
+    ...fileConfig.tokens,
     ...cliConfig
   }
 
-  // Interactive mode: default true unless noTokens flag or tokens already provided
-  if ((cliConfig.interactive !== false) && (!cliConfig.noTokens) && (!config.githubToken && !config.gitlabToken && !config.bitbucketToken)) {
-    const interactiveConfig = await promptForTokens()
-    Object.assign(config, interactiveConfig)
+  // Apply scoring configuration if provided
+  if (fileConfig.scoring) {
+    setScoringConfig(fileConfig.scoring)
   }
 
-  return config
+  return finalConfig
 } 

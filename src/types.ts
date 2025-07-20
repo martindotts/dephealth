@@ -24,13 +24,43 @@ export interface PackageInfo {
   };
 }
 
+export interface ScoringConfig {
+  weights: {
+    lag: number;
+    vuln: number;
+    health: number;
+    activity: number;
+  };
+  constants: {
+    maxStars: number;
+    minStarsForIssueRatio: number;
+    maxIssueRatio: number;
+    activityThresholdDays: number;
+  };
+  penalties: {
+    majorUpdate: number;
+    minorUpdate: number;
+    patchUpdate: number;
+    criticalVuln: number;
+    highVuln: number;
+    moderateVuln: number;
+  };
+}
+
+export interface AppConfig {
+  tokens?: {
+    github?: string;
+    gitlab?: string;
+    bitbucket?: string;
+  };
+  scoring?: Partial<ScoringConfig>;
+}
+
 export interface Config {
   githubToken?: string;
   gitlabToken?: string;
   bitbucketToken?: string;
-  interactive?: boolean;
   configFile?: string;
-  noTokens?: boolean;
 }
 
 export interface ScoringParams {
@@ -55,6 +85,6 @@ export interface DependencyResult {
     latest: string;
   } | null;
   vulnerabilitiesCount: number;
-  repoHealth: RepoHealth | null
-  score?: number
+  repoHealth: RepoHealth | null;
+  score?: number;
 } 
