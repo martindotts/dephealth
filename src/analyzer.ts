@@ -73,15 +73,25 @@ function calculateDownload(pkg: Package): number {
 }
 
 /**
- * Vulnerability score.
- * - Severity weights roughly reflect CVSS impact.
- * - Total penalty capped; zero vulns ⇒ 1.0, severe backlog ⇒ 0.
+ * Vulnerability score (strict).
+ * - Critical ⇒ instant zero
+ * - High: 2 knocks you to zero
+ * - Moderate & Low contribute, but cannot “save” a bad score
+ * - Score = 1 (clean) … 0 (unacceptable)
  */
 function calculateVulnerability(pkg: Package): number {
   const { critical, high, moderate, low } = pkg.vulnerabilities
-  const points = critical * 8 + high * 6 + moderate * 4 + low * 2
-  return Math.max(0, 1 - Math.min(points, 25) / 25) // max practical ≈25
+
+  const criticalPenalty = critical * 0.6
+  const highPenalty = high * 0.4
+  const moderatePenalty = moderate * 0.2
+  const lowPenalty      = low * 0.1
+
+  const totalPenalty = Math.min(criticalPenalty + highPenalty + moderatePenalty + lowPenalty, 1)
+
+  return 1 - totalPenalty
 }
+
 
 /**
  * Issue health.
@@ -188,21 +198,25 @@ export async function analyzeDependencies(tokens?: GitTokens): Promise<{package:
     getOutdatedPackages()
   ])
   
-  console.log(chalk.cyan(`📦 Analyzing ${Object.keys(dependencies).length} packages...`))
-  
   // Create concurrency limiter (max 10 concurrent operations)
   const limit = pLimit(10)
+  
+  // Track progress
+  let analyzedCount = 0
+  const totalPackages = Object.keys(dependencies).length
   
   // Analyze dependencies in parallel with concurrency limit
   const analysisPromises = Object.entries(dependencies).map(([packageName, _version]) => 
     limit(async () => {
       try {
-        console.log(chalk.gray(`  📋 ${packageName}...`))
+        // Update progress on the same line
+        analyzedCount++
+        process.stdout.write(`\r${chalk.gray(`📋 (${analyzedCount}/${totalPackages}) Analyzing packages...`)}`)
         
         // Get package info from npm
         const npmInfo = await getPackageInfo(packageName)
         if (!npmInfo) {
-          console.log(chalk.yellow(`    ⚠️  Could not fetch info for ${packageName}`))
+          console.log(chalk.yellow(`\n    ⚠️  Could not fetch info for ${packageName}`))
           return null
         }
         
@@ -221,7 +235,7 @@ export async function analyzeDependencies(tokens?: GitTokens): Promise<{package:
         return { package: packageData, scores }
         
       } catch (error) {
-        console.log(chalk.red(`    ❌ Error analyzing ${packageName}:`, error))
+        console.log(chalk.red(`\n    ❌ Error analyzing ${packageName}:`, error))
         return null
       }
     })
@@ -230,6 +244,8 @@ export async function analyzeDependencies(tokens?: GitTokens): Promise<{package:
   // Wait for all analyses to complete
   const results = (await Promise.all(analysisPromises)).filter(Boolean) as {package: Package, scores: Scores}[]
   
+  // Clear the progress line and show completion
+  process.stdout.write('\r' + ' '.repeat(80) + '\r') // Clear the line
   console.log(chalk.green.bold(`✅ Analysis complete! Analyzed ${results.length} packages`))
   return results
 }
@@ -237,7 +253,7 @@ export async function analyzeDependencies(tokens?: GitTokens): Promise<{package:
 /**
  * Display results in a professional formatted table
  */
-export function display(data: {package: Package, scores: Scores}[], weights?: {
+export function display(data: {package: Package, scores: Scores}[], boosters?: {
   maturity?: number
   updateFrequency?: number
   deprecation?: number
@@ -254,59 +270,53 @@ export function display(data: {package: Package, scores: Scores}[], weights?: {
   console.log('\n' + chalk.blue.bold('📊 DEPENDENCY HEALTH REPORT'))
   console.log(chalk.gray('='.repeat(80)))
   
-  // Default weights if not provided (all equal, sum to 1)
-  const defaultWeights = {
-    maturity: 0.2,
-    updateFrequency: 0.05,
-    deprecation: 0.3,
-    dependency: 0.05,
-    download: 0.05,
-    vulnerability: 0.3,
-    issues: 0.05,
+  // Default boosters if not provided (all equal to 1.0 - no boost)
+  const defaultBoosters = {
+    maturity: 2,
+    updateFrequency: 1,
+    deprecation: 4,
+    dependency: 1,
+    download: 1,
+    vulnerability: 2,
+    issues: 1,
   }
   
-  const finalWeights = {
-    maturity: weights?.maturity ?? defaultWeights.maturity,
-    updateFrequency: weights?.updateFrequency ?? defaultWeights.updateFrequency,
-    deprecation: weights?.deprecation ?? defaultWeights.deprecation,
-    dependency: weights?.dependency ?? defaultWeights.dependency,
-    download: weights?.download ?? defaultWeights.download,
-    vulnerability: weights?.vulnerability ?? defaultWeights.vulnerability,
-    issues: weights?.issues ?? defaultWeights.issues
+  const finalBoosters = {
+    maturity: boosters?.maturity ?? defaultBoosters.maturity,
+    updateFrequency: boosters?.updateFrequency ?? defaultBoosters.updateFrequency,
+    deprecation: boosters?.deprecation ?? defaultBoosters.deprecation,
+    dependency: boosters?.dependency ?? defaultBoosters.dependency,
+    download: boosters?.download ?? defaultBoosters.download,
+    vulnerability: boosters?.vulnerability ?? defaultBoosters.vulnerability,
+    issues: boosters?.issues ?? defaultBoosters.issues
   }
   
-  // Normalize weights to sum to 1
-  const totalWeight = 
-    finalWeights.maturity + finalWeights.updateFrequency + finalWeights.deprecation + 
-    finalWeights.dependency + finalWeights.download + finalWeights.vulnerability + finalWeights.issues
-  
-  const normalizedWeights = {
-    maturity: finalWeights.maturity / totalWeight,
-    updateFrequency: finalWeights.updateFrequency / totalWeight,
-    deprecation: finalWeights.deprecation / totalWeight,
-    dependency: finalWeights.dependency / totalWeight,
-    download: finalWeights.download / totalWeight,
-    vulnerability: finalWeights.vulnerability / totalWeight,
-    issues: finalWeights.issues / totalWeight
-  }
-  
-  // Calculate weighted score
-  const calculateWeightedScore = (scores: Scores): number => {
+  // Calculate boosted score using multipliers
+  const calculateBoostedScore = (scores: Scores): number => {
+    const boostedScores = {
+      maturity: scores.maturity * finalBoosters.maturity,
+      updateFrequency: scores.updateFrequency * finalBoosters.updateFrequency,
+      deprecation: scores.deprecation * finalBoosters.deprecation,
+      dependency: scores.dependency * finalBoosters.dependency,
+      download: scores.download * finalBoosters.download,
+      vulnerability: scores.vulnerability * finalBoosters.vulnerability,
+      issues: scores.issues * finalBoosters.issues
+    }
+    
+    // Calculate total weight
+    const totalWeight = Object.values(finalBoosters).reduce((sum, weight) => sum + weight, 0)
+    
+    // Return weighted average
     return (
-      scores.maturity * normalizedWeights.maturity +
-      scores.updateFrequency * normalizedWeights.updateFrequency +
-      scores.deprecation * normalizedWeights.deprecation +
-      scores.dependency * normalizedWeights.dependency +
-      scores.download * normalizedWeights.download +
-      scores.vulnerability * normalizedWeights.vulnerability +
-      scores.issues * normalizedWeights.issues
-    )
+      boostedScores.maturity + boostedScores.updateFrequency + boostedScores.deprecation +
+      boostedScores.dependency + boostedScores.download + boostedScores.vulnerability + boostedScores.issues
+    ) / totalWeight
   }
   
-  // Sort by weighted overall score
+  // Sort by boosted overall score
   const sortedData = data.sort((a, b) => {
-    const scoreA = calculateWeightedScore(a.scores)
-    const scoreB = calculateWeightedScore(b.scores)
+    const scoreA = calculateBoostedScore(a.scores)
+    const scoreB = calculateBoostedScore(b.scores)
     return scoreB - scoreA
   })
   
@@ -319,7 +329,7 @@ export function display(data: {package: Package, scores: Scores}[], weights?: {
   
   // Prepare table data
   const tableData = sortedData.map(({ package: pkg, scores }) => {
-    const overallScore = calculateWeightedScore(scores)
+    const overallScore = calculateBoostedScore(scores)
     
     return {
       Package: chalk.bold(pkg.name),
